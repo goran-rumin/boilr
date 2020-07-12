@@ -21,7 +21,7 @@ func ZipURL(repo string) string {
 		return repo
 	}
 
-	// FIXME(tmrts): this check could also identify a port number, but since
+	// FIXME(goran-rumin): this check could also identify a port number, but since
 	// we only support github I don't believe using it as a version modifier
 	// is a problem. Perhaps we should reconsider?
 	if strings.Contains(repo, ":") {
