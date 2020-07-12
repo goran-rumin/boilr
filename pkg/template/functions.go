@@ -84,16 +84,16 @@ var (
 		},
 
 		// String utilities
-		"toLower": strings.ToLower,
-		"toUpper": strings.ToUpper,
-		"toTitle": strings.ToTitle,
-		"title":   strings.Title,
-
+		"toLower":    strings.ToLower,
+		"toUpper":    strings.ToUpper,
+		"toTitle":    strings.ToTitle,
+		"title":      strings.Title,
 		"trimSpace":  strings.TrimSpace,
 		"trimPrefix": strings.TrimPrefix,
 		"trimSuffix": strings.TrimSuffix,
-
-		"repeat": strings.Repeat,
+		"repeat":     strings.Repeat,
+		"split":      strings.Split,
+		"replaceAll": strings.ReplaceAll,
 	}
 
 	// Options contain the default options for the template execution.
