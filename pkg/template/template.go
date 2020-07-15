@@ -63,6 +63,9 @@ func Get(path string) (Interface, error) {
 
 		return metadata, nil
 	}(filepath.Join(absPath, boilr.ContextFileName))
+	if err != nil {
+		return nil, err
+	}
 
 	metadataExists, err := osutil.FileExists(filepath.Join(absPath, boilr.TemplateMetadataName))
 	if err != nil {
@@ -86,13 +89,20 @@ func Get(path string) (Interface, error) {
 
 		return m, nil
 	}()
+	if err != nil {
+		return nil, err
+	}
 
-	return &dirTemplate{
+	tmpl := &dirTemplate{
 		Context:  ctxt,
 		FuncMap:  FuncMap,
 		Path:     filepath.Join(absPath, boilr.TemplateDirName),
 		Metadata: md,
-	}, err
+	}
+	if err = tmpl.validate(); err != nil {
+		return nil, err
+	}
+	return tmpl, nil
 }
 
 type dirTemplate struct {
@@ -252,5 +262,27 @@ func (t *dirTemplate) Execute(dirPrefix string) error {
 		}
 
 		return nil
+	})
+}
+
+// validate checks template for errors
+func (t *dirTemplate) validate() error {
+	t.BindPrompts()
+
+	return filepath.Walk(t.Path, func(filename string, info os.FileInfo, err error) error {
+		oldName, err := filepath.Rel(t.Path, filename)
+		if err != nil {
+			return err
+		}
+
+		_, err = template.New("file name template").Option(Options...).Funcs(FuncMap).Parse(oldName)
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			_, err = template.New("file contents template").Option(Options...).Funcs(FuncMap).ParseFiles(filename)
+		}
+		return err
 	})
 }

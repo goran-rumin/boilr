@@ -3,8 +3,6 @@ package util
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 
 	"github.com/goran-rumin/boilr/pkg/template"
@@ -69,23 +67,6 @@ func ValidateArgs(args []string, validations []validate.Argument) error {
 	return nil
 }
 
-func testTemplate(path string) error {
-	tmpDir, err := ioutil.TempDir("", "boilr-validation-test")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmpDir)
-
-	tmpl, err := template.Get(path)
-	if err != nil {
-		return err
-	}
-
-	tmpl.UseDefaultValues()
-
-	return tmpl.Execute(tmpDir)
-}
-
 // ValidateTemplate validates the template structure given the template path.
 func ValidateTemplate(tmplPath string) (bool, error) {
 	if exists, err := osutil.DirExists(tmplPath); !exists {
@@ -104,7 +85,7 @@ func ValidateTemplate(tmplPath string) (bool, error) {
 		return false, fmt.Errorf("template should contain %q directory", "template")
 	}
 
-	if err := testTemplate(tmplPath); err != nil {
+	if _, err := template.Get(tmplPath); err != nil {
 		return false, err
 	}
 
