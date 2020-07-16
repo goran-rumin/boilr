@@ -120,50 +120,40 @@ func (t *dirTemplate) UseDefaultValues() {
 }
 
 func (t *dirTemplate) BindPrompts() {
-	for s, v := range t.Context {
-		if m, ok := v.(map[string]interface{}); ok {
-			advancedMode := prompt.New(s, false)
-
-			for k, v2 := range m {
-				if t.ShouldUseDefaults {
-					t.FuncMap[k] = func() interface{} {
-						switch v2 := v2.(type) {
-						// First is the default value if it's a slice
-						case []interface{}:
-							return v2[0]
-						}
-
-						return v2
-					}
-				} else {
-					v, p := v2, prompt.New(k, v2)
-
-					t.FuncMap[k] = func() interface{} {
-						if val := advancedMode().(bool); val {
-							return p()
-						}
-
-						return v
-					}
-				}
+	for templateVariable, defaultValue := range t.Context {
+		if m, ok := defaultValue.(map[string]interface{}); ok {
+			advancedMode := prompt.New(templateVariable, false)
+			for childVariable, childDefaultValue := range m {
+				t.bindPrompt(childVariable, childDefaultValue, &advancedMode)
 			}
-
 			continue
 		}
+		t.bindPrompt(templateVariable, defaultValue, nil)
+	}
+}
 
-		if t.ShouldUseDefaults {
-			v := v
-			t.FuncMap[s] = func() interface{} {
-				switch v := v.(type) {
-				// First is the default value if it's a slice
-				case []interface{}:
-					return v[0]
+func (t *dirTemplate) bindPrompt(templateVariable string, defaultValue interface{}, parentPrompt *func() interface{}) {
+	if t.ShouldUseDefaults {
+		t.FuncMap[templateVariable] = func() interface{} {
+			switch value := defaultValue.(type) {
+			// First is the default value if it's a slice
+			case []interface{}:
+				return value[0]
+			}
+			return defaultValue
+		}
+	} else {
+		prompt := prompt.New(templateVariable, defaultValue)
+
+		if parentPrompt != nil {
+			t.FuncMap[templateVariable] = func() interface{} {
+				if val := (*parentPrompt)().(bool); val {
+					return prompt()
 				}
-
-				return v
+				return defaultValue
 			}
 		} else {
-			t.FuncMap[s] = prompt.New(s, v)
+			t.FuncMap[templateVariable] = prompt
 		}
 	}
 }
