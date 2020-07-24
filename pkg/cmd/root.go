@@ -34,6 +34,7 @@ func Run() {
 	Template.AddCommand(Save)
 
 	Use.PersistentFlags().BoolP("use-defaults", "f", false, "Uses default values in project.json instead of prompting the user")
+	Use.PersistentFlags().StringP("values-file", "w", "", "JSON file with template variables definition (format as project.json)")
 	Use.PersistentFlags().StringP("log-level", "l", "error", "log-level for output")
 	Template.AddCommand(Use)
 

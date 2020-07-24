@@ -24,6 +24,9 @@ type Interface interface {
 	// If used, the template will execute using default values.
 	UseDefaultValues()
 
+	// If used, the template will execute without prompts using provided values.
+	UseValues(path string) error
+
 	// Returns the metadata of the template.
 	Info() Metadata
 }
@@ -40,29 +43,7 @@ func Get(path string) (Interface, error) {
 	}
 
 	// TODO make context optional
-	ctxt, err := func(fname string) (map[string]interface{}, error) {
-		f, err := os.Open(fname)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil, nil
-			}
-
-			return nil, err
-		}
-		defer f.Close()
-
-		buf, err := ioutil.ReadAll(f)
-		if err != nil {
-			return nil, err
-		}
-
-		var metadata map[string]interface{}
-		if err := json.Unmarshal(buf, &metadata); err != nil {
-			return nil, err
-		}
-
-		return metadata, nil
-	}(filepath.Join(absPath, boilr.ContextFileName))
+	ctxt, err := readContext(filepath.Join(absPath, boilr.ContextFileName))
 	if err != nil {
 		return nil, err
 	}
@@ -113,26 +94,49 @@ type dirTemplate struct {
 
 	alignment         string
 	ShouldUseDefaults bool
+	ProvidedValues    map[string]interface{}
+	ProvidedValuesSet bool
 }
 
 func (t *dirTemplate) UseDefaultValues() {
 	t.ShouldUseDefaults = true
 }
 
+func (t *dirTemplate) UseValues(path string) error {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+
+	values, err := readContext(absPath)
+	if err != nil {
+		return err
+	}
+	t.ProvidedValues = values
+	t.ProvidedValuesSet = true
+	return nil
+}
+
 func (t *dirTemplate) BindPrompts() {
 	for templateVariable, defaultValue := range t.Context {
 		if m, ok := defaultValue.(map[string]interface{}); ok {
 			advancedMode := prompt.New(templateVariable, false)
+			var providedValues map[string]interface{}
+			if t.ProvidedValuesSet {
+				if value, ok := t.ProvidedValues[templateVariable]; ok {
+					providedValues, _ = value.(map[string]interface{})
+				}
+			}
 			for childVariable, childDefaultValue := range m {
-				t.bindPrompt(childVariable, childDefaultValue, &advancedMode)
+				t.bindPrompt(childVariable, childDefaultValue, &advancedMode, providedValues)
 			}
 			continue
 		}
-		t.bindPrompt(templateVariable, defaultValue, nil)
+		t.bindPrompt(templateVariable, defaultValue, nil, t.ProvidedValues)
 	}
 }
 
-func (t *dirTemplate) bindPrompt(templateVariable string, defaultValue interface{}, parentPrompt *func() interface{}) {
+func (t *dirTemplate) bindPrompt(templateVariable string, defaultValue interface{}, parentPrompt *func() interface{}, providedValues map[string]interface{}) {
 	if t.ShouldUseDefaults {
 		t.FuncMap[templateVariable] = func() interface{} {
 			switch value := defaultValue.(type) {
@@ -141,6 +145,14 @@ func (t *dirTemplate) bindPrompt(templateVariable string, defaultValue interface
 				return value[0]
 			}
 			return defaultValue
+		}
+	} else if t.ProvidedValuesSet {
+		providedValue, ok := providedValues[templateVariable]
+		if !ok {
+			return
+		}
+		t.FuncMap[templateVariable] = func() interface{} {
+			return providedValue
 		}
 	} else {
 		prompt := prompt.New(templateVariable, defaultValue)
@@ -184,11 +196,14 @@ func (t *dirTemplate) Execute(dirPrefix string) error {
 		buf := stringutil.NewString("")
 
 		// TODO translate errors into meaningful ones
-		fnameTmpl := template.Must(template.
+		fnameTmpl, err := template.
 			New("file name template").
 			Option(Options...).
 			Funcs(FuncMap).
-			Parse(oldName))
+			Parse(oldName)
+		if err != nil {
+			return err
+		}
 
 		if err := fnameTmpl.Execute(buf, nil); err != nil {
 			return err
@@ -234,11 +249,14 @@ func (t *dirTemplate) Execute(dirPrefix string) error {
 				}
 			}(f.Name())
 
-			contentsTmpl := template.Must(template.
+			contentsTmpl, err := template.
 				New("file contents template").
 				Option(Options...).
 				Funcs(FuncMap).
-				ParseFiles(filename))
+				ParseFiles(filename)
+			if err != nil {
+				return err
+			}
 
 			fileTemplateName := filepath.Base(filename)
 
@@ -292,4 +310,28 @@ func (t *dirTemplate) buildValidationFuncMap() template.FuncMap {
 		funcMap[k] = func() interface{} { return nil }
 	}
 	return funcMap
+}
+
+func readContext(fname string) (map[string]interface{}, error) {
+	f, err := os.Open(fname)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+	defer f.Close()
+
+	buf, err := ioutil.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal(buf, &data); err != nil {
+		return nil, err
+	}
+
+	return data, nil
 }

@@ -64,8 +64,18 @@ var Use = &cli.Command{
 			exit.Fatal(fmt.Errorf("use: %s", err))
 		}
 
-		if shouldUseDefaults := GetBoolFlag(cmd, "use-defaults"); shouldUseDefaults {
+		shouldUseDefaults := GetBoolFlag(cmd, "use-defaults")
+		if shouldUseDefaults {
 			tmpl.UseDefaultValues()
+		}
+		valuesFile := GetStringFlag(cmd, "values-file")
+		if len(valuesFile) > 0 && shouldUseDefaults {
+			exit.Fatal(fmt.Errorf("conflicting flags 'use-defaults' and 'values-file' used"))
+		}
+		if len(valuesFile) > 0 {
+			if err = tmpl.UseValues(valuesFile); err != nil {
+				exit.Fatal(fmt.Errorf("values-file error: %s", err))
+			}
 		}
 
 		executeTemplate := func() error {
