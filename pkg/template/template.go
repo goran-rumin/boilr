@@ -257,7 +257,7 @@ func (t *dirTemplate) Execute(dirPrefix string) error {
 
 // validate checks template for errors
 func (t *dirTemplate) validate() error {
-	t.BindPrompts()
+	vFuncMap := t.buildValidationFuncMap()
 
 	return filepath.Walk(t.Path, func(filename string, info os.FileInfo, err error) error {
 		oldName, err := filepath.Rel(t.Path, filename)
@@ -265,14 +265,31 @@ func (t *dirTemplate) validate() error {
 			return err
 		}
 
-		_, err = template.New("file name template").Option(Options...).Funcs(FuncMap).Parse(oldName)
+		_, err = template.New("file name template").Option(Options...).Funcs(vFuncMap).Parse(oldName)
 		if err != nil {
 			return err
 		}
 
 		if !info.IsDir() {
-			_, err = template.New("file contents template").Option(Options...).Funcs(FuncMap).ParseFiles(filename)
+			_, err = template.New("file contents template").Option(Options...).Funcs(vFuncMap).ParseFiles(filename)
 		}
 		return err
 	})
+}
+
+func (t *dirTemplate) buildValidationFuncMap() template.FuncMap {
+	funcMap := make(template.FuncMap)
+	for k, v := range t.FuncMap {
+		funcMap[k] = v
+	}
+	for k, v := range t.Context {
+		if m, ok := v.(map[string]interface{}); ok {
+			for cK := range m {
+				funcMap[cK] = func() interface{} { return nil }
+			}
+			continue
+		}
+		funcMap[k] = func() interface{} { return nil }
+	}
+	return funcMap
 }
