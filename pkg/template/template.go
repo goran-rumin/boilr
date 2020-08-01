@@ -182,7 +182,7 @@ func (t *dirTemplate) Execute(dirPrefix string) error {
 
 	// TODO create io.ReadWriter from string
 	// TODO refactor name manipulation
-	return filepath.Walk(t.Path, func(filename string, info os.FileInfo, err error) error {
+	err := filepath.Walk(t.Path, func(filename string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -271,6 +271,10 @@ func (t *dirTemplate) Execute(dirPrefix string) error {
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	return removeEmptyDirs(dirPrefix)
 }
 
 // validate checks template for errors
@@ -334,4 +338,42 @@ func readContext(fname string) (map[string]interface{}, error) {
 	}
 
 	return data, nil
+}
+
+func removeEmptyDirs(dir string) error {
+	stat, err := os.Stat(dir)
+	if err != nil || !stat.IsDir() {
+		return err
+	}
+	children, err := getDirChildren(dir)
+	if err != nil {
+		return err
+	}
+	for _, child := range children {
+		err = removeEmptyDirs(filepath.Join(dir, child))
+		if err != nil {
+			return err
+		}
+	}
+	if len(children) != 0 { // check if all children were deleted
+		children, err = getDirChildren(dir)
+		if err != nil {
+			return err
+		}
+	}
+	if len(children) == 0 {
+		if err := os.Remove(dir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func getDirChildren(dir string) ([]string, error) {
+	f, err := os.Open(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return f.Readdirnames(0)
 }
